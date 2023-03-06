@@ -8,6 +8,7 @@
         <outputRelativeToContentRoot value="true" />
         <module name="ApplyWatermarkSOI" />
         <module name="ApplyGeoFilterSOI" />
+        <module name="Info_SOI" />
       </profile>
     </annotationProcessing>
   </component>
