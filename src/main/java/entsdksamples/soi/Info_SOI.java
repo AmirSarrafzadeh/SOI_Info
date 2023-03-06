@@ -1,21 +1,23 @@
 package entsdksamples.soi;
-
 /*
 email: amir@wheretech.it
 */
-
 import java.io.*;
+import java.awt.*;
 import java.util.Map;
 import java.util.List;
+import org.json.JSONObject;
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import javax.imageio.ImageIO;
 import com.esri.arcgis.carto.*;
-import com.esri.arcgis.geodatabase.*;
-import com.esri.arcgis.geometry.IGeometry;
-import com.esri.arcgis.geometry.JSONConverterGeometry;
 import com.esri.arcgis.system.*;
+import java.awt.geom.Rectangle2D;
+import java.awt.image.BufferedImage;
+import com.esri.arcgis.geodatabase.*;
 import org.apache.http.NameValuePair;
 import com.esri.arcgis.server.SOIHelper;
+import com.esri.arcgis.geometry.IGeometry;
 import com.esri.arcgis.server.IServerObject;
 import com.esri.arcgis.system.ServerUtilities;
 import com.esri.arcgis.system.IServerUserInfo;
@@ -23,6 +25,7 @@ import com.esri.arcgis.server.IServerObjectHelper;
 import com.esri.arcgis.interop.AutomationException;
 import com.esri.arcgis.interop.extn.ArcGISExtension;
 import com.esri.arcgis.server.IServerObjectExtension;
+import com.esri.arcgis.geometry.JSONConverterGeometry;
 import com.esri.arcgis.interop.extn.ServerObjectExtProperties;
 
 @ArcGISExtension
@@ -47,7 +50,7 @@ public class Info_SOI
     private static final String ARCGISHOME_ENV = "AGSSERVER";
     private static String user, default_map_name;
     private IServerUserInfo userinfo;
-
+    private static final String WATERMARK_STRING = "© WhereTech S.r.l";
     /**
      * Default constructor.
      *
@@ -127,10 +130,25 @@ public class Info_SOI
 
         // Find the correct delegate to forward the request too
         IRESTRequestHandler restRequestHandler = soiHelper.findRestRequestHandlerDelegate(so);
+        byte[] response =
+                restRequestHandler.handleRESTRequest(capabilities, resourceName, operationName, operationInput, outputFormat,
+                        requestProperties, responseProperties);
 
         if (restRequestHandler != null) {
 
             serverLog.addMessage(4, 200, "restRequestHandler is not null");
+            BufferedImage sourceImage = null;
+            sourceImage = byteArrayToBufferedImage(response);
+            JSONObject jsonObject = new JSONObject(operationInput);
+            String image_format = jsonObject.getString("format");
+            byte[] watermarkedImage =
+                    addTextWatermark(WATERMARK_STRING, sourceImage, image_format,
+                            outputFormat, null);
+
+            if (watermarkedImage != null) {
+                return watermarkedImage;
+            }
+
             IMapServer ms = (IMapServer) this.soHelper.getServerObject();
             map_counts = ms.getMapCount();
             serverLog.addMessage(4, 200, "There is " + map_counts + " in this map service");
@@ -163,7 +181,6 @@ public class Info_SOI
             }
 
             // Get the User's info
-
             try {
                 userinfo = ServerUtilities.getServerUserInfo();
                 user = userinfo.getName();
@@ -216,7 +233,7 @@ public class Info_SOI
                             IGeometry fc_shape = (IGeometry) resultFeature.getValue(resultFeature.getFields().findField("SHAPE"));
                             geoSerializer.queryJSONGeometry(fc_shape, false, fc_jsonobject);
                             String fc_geometry = fc_jsonobject.toJSONString(null);
-                            serverLog.addMessage(3, 200, "feature_geometry: " + fc_geometry);
+                            serverLog.addMessage(5, 200, "feature_geometry: " + fc_geometry);
                         }
                     }
 
@@ -402,5 +419,54 @@ public class Info_SOI
             arcgisHome += File.separator;
         }
         return arcgisHome;
+    }
+
+    private byte[] addTextWatermark(String watermarkText, BufferedImage sourceImage, String imageType,
+                                    String outputFormat, File outputImageFile) throws IOException {
+        // Create BufferedImage and Graphics2D objects
+        Graphics2D g2d = (Graphics2D) sourceImage.getGraphics();
+
+        // Initializes necessary graphic properties
+        AlphaComposite alphaChannel = AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.1f);
+        g2d.setComposite(alphaChannel);
+        g2d.setColor(Color.BLUE);
+        g2d.setFont(new Font("Arial", Font.BOLD, 64));
+        FontMetrics fontMetrics = g2d.getFontMetrics();
+        Rectangle2D rect = fontMetrics.getStringBounds(watermarkText, g2d);
+
+        // Calculate the center
+        int centerX = (sourceImage.getWidth() - (int) rect.getWidth()) / 2;
+        int centerY = sourceImage.getHeight() / 2;
+
+        // Add watermark at the center of image
+        g2d.drawString(watermarkText, centerX, centerY);
+        g2d.dispose();
+
+        if (outputFormat.equalsIgnoreCase("image")) {
+            return bufferedImagetoByteArray(sourceImage, imageType);
+        } else if (outputFormat.equalsIgnoreCase("json")) {
+            // replace watermarked image with original image
+            writeImageToDisk(sourceImage, imageType, outputImageFile);
+            return null;
+        }
+
+        return null;
+    }
+
+    private byte[] bufferedImagetoByteArray(BufferedImage sourceImage, String imageType) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ImageIO.write(sourceImage, (imageType.startsWith("png")) ? "PNG" : "JPG", baos);
+        baos.flush();
+        byte[] imageInBA = baos.toByteArray();
+        baos.close();
+        return imageInBA;
+    }
+
+    private void writeImageToDisk(BufferedImage sourceImage, String imageType, File outputImageFile) throws IOException {
+        ImageIO.write(sourceImage, (imageType.startsWith("png")) ? "PNG" : "JPG", outputImageFile);
+    }
+
+    private BufferedImage byteArrayToBufferedImage(byte[] sourceImageBytes) throws IOException {
+        return ImageIO.read(new ByteArrayInputStream(sourceImageBytes));
     }
 }
