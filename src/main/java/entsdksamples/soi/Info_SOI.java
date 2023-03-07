@@ -50,7 +50,7 @@ public class Info_SOI
     private static final String ARCGISHOME_ENV = "AGSSERVER";
     private static String user, default_map_name;
     private IServerUserInfo userinfo;
-    private static final String WATERMARK_STRING = "© WhereTech S.r.l";
+    private static final String WATERMARK_STRING = "© Sample WaterMark";
     /**
      * Default constructor.
      *
@@ -134,19 +134,24 @@ public class Info_SOI
                 restRequestHandler.handleRESTRequest(capabilities, resourceName, operationName, operationInput, outputFormat,
                         requestProperties, responseProperties);
 
+        byte[] watermark;
         if (restRequestHandler != null) {
 
             serverLog.addMessage(4, 200, "restRequestHandler is not null");
             BufferedImage sourceImage = null;
             sourceImage = byteArrayToBufferedImage(response);
             JSONObject jsonObject = new JSONObject(operationInput);
-            String image_format = jsonObject.getString("format");
-            byte[] watermarkedImage =
-                    addTextWatermark(WATERMARK_STRING, sourceImage, image_format,
-                            outputFormat, null);
-
-            if (watermarkedImage != null) {
-                return watermarkedImage;
+            if (jsonObject.length() > 0) {
+                serverLog.addMessage(3, 200, "jsonObject: " + jsonObject);
+                String image_format = jsonObject.getString("format");
+                byte[] watermarkedImage =
+                        addTextWatermark(WATERMARK_STRING, sourceImage, image_format,
+                                outputFormat, null);
+//                if (watermarkedImage != null){
+//                    return watermarkedImage;
+//                }
+            } else {
+                serverLog.addMessage(3, 200, "jsonObject: " + jsonObject);
             }
 
             IMapServer ms = (IMapServer) this.soHelper.getServerObject();
@@ -239,6 +244,11 @@ public class Info_SOI
 
                 }
             }
+            JSONObject operationInput_json = new JSONObject(operationInput);
+            operationInput_json.put("layers", "show:" + "0");
+            operationInput_json.put("transparent", false);
+            operationInput = operationInput_json.toString();
+            serverLog.addMessage(3, 200, "operationinput: " + operationInput);
         }
         return restRequestHandler.handleRESTRequest(capabilities, resourceName, operationName, operationInput,
                 outputFormat, requestProperties, responseProperties);
